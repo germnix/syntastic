@@ -217,6 +217,7 @@ command! -bar SyntasticSetLoclist call SyntasticSetLoclist()
 
 command! SyntasticJavacEditClasspath runtime! syntax_checkers/java/*.vim | SyntasticJavacEditClasspath
 command! SyntasticJavacEditConfig    runtime! syntax_checkers/java/*.vim | SyntasticJavacEditConfig
+command! SyntasticJavacLoadClasspath runtime! syntax_checkers/java/*.vim | SyntasticJavacLoadClasspath
 
 " }}}1
 

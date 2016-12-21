@@ -17,7 +17,6 @@ let g:loaded_syntastic_java_javac_checker = 1
 let g:syntastic_java_javac_maven_pom_tags = ['build', 'properties']
 let g:syntastic_java_javac_maven_pom_properties = {}
 let s:has_maven = 0
-let s:javac_classpath = ''
 
 let s:save_cpo = &cpo
 set cpo&vim
@@ -89,6 +88,7 @@ lockvar! s:_FILE_SHORTCUTS
 
 command! SyntasticJavacEditClasspath call s:EditClasspath()
 command! SyntasticJavacEditConfig    call s:EditConfig()
+command! SyntasticJavacLoadClasspath call SyntaxCheckers_java_javac_LoadClasspath()
 
 " }}}1
 
@@ -106,62 +106,10 @@ function! SyntaxCheckers_java_javac_GetLocList() dict " {{{1
         let javac_opts .= ' -d ' . syntastic#util#shescape(output_dir)
     endif
 
-    " load classpath from config file
-    if g:syntastic_java_javac_config_file_enabled
-        call s:LoadConfigFile()
-        let s:javac_classpath = g:syntastic_java_javac_classpath
-    endif
+    let javac_classpath = SyntaxCheckers_java_javac_LoadClasspath()
 
-
-    " add classpathes to javac_classpath {{{2
-    if s:javac_classpath ==# ''
-        for path in split(g:syntastic_java_javac_classpath, s:ClassSep())
-            if path !=# ''
-                try
-                    let ps = glob(path, 1, 1)
-                catch
-                    let ps = split(glob(path, 1), "\n")
-                endtry
-                if type(ps) == type([])
-                    for p in ps
-                        let s:javac_classpath = s:AddToClasspath(s:javac_classpath, p)
-                    endfor
-                else
-                    let s:javac_classpath = s:AddToClasspath(s:javac_classpath, ps)
-                endif
-            endif
-        endfor
-    
-        if s:has_maven && g:syntastic_java_javac_autoload_maven_classpath
-            if !g:syntastic_java_javac_delete_output
-                let javac_opts .= ' -d ' . syntastic#util#shescape(s:MavenOutputDirectory())
-            endif
-            let s:javac_classpath = s:AddToClasspath(s:javac_classpath, s:GetMavenClasspath())
-        endif
-        " }}}2
-    
-        " load custom classpath {{{2
-        if g:syntastic_java_javac_custom_classpath_command !=# ''
-            " Pre-process the classpath command string a little.
-            let classpath_command = g:syntastic_java_javac_custom_classpath_command
-            for [key, val] in items(s:_FILE_SHORTCUTS)
-                let classpath_command = substitute(classpath_command, '\V' . key, syntastic#util#shexpand(val), 'g')
-            endfor
-            let lines = syntastic#util#system(classpath_command)
-            if syntastic#util#isRunningWindows() || has('win32unix')
-                let lines = substitute(lines, "\r\n", "\n", 'g')
-            endif
-            for l in split(lines, "\n")
-                let s:javac_classpath = s:AddToClasspath(s:javac_classpath, l)
-            endfor
-        endif
-
-        call s:SaveComputedClasspath()
-
-    endif
-
-    if s:javac_classpath !=# ''
-        let javac_opts .= ' -cp ' . syntastic#util#shexpand(s:javac_classpath)
+    if javac_classpath !=# ''
+        let javac_opts .= ' -cp ' . syntastic#util#shexpand(javac_classpath)
     endif
     " }}}2
 
@@ -197,6 +145,68 @@ function! SyntaxCheckers_java_javac_GetLocList() dict " {{{1
     return errors
 
 endfunction " }}}1
+
+
+function! SyntaxCheckers_java_javac_LoadClasspath() " {{{1
+    let javac_classpath = ''
+
+    " load classpath from config file
+    if g:syntastic_java_javac_config_file_enabled
+        call s:LoadConfigFile()
+        let javac_classpath = g:syntastic_java_javac_classpath
+    endif
+
+
+    " add classpathes to javac_classpath {{{2
+    if javac_classpath ==# ''
+        for path in split(g:syntastic_java_javac_classpath, s:ClassSep())
+            if path !=# ''
+                try
+                    let ps = glob(path, 1, 1)
+                catch
+                    let ps = split(glob(path, 1), "\n")
+                endtry
+                if type(ps) == type([])
+                    for p in ps
+                        let javac_classpath = s:AddToClasspath(javac_classpath, p)
+                    endfor
+                else
+                    let javac_classpath = s:AddToClasspath(javac_classpath, ps)
+                endif
+            endif
+        endfor
+    
+        if s:has_maven && g:syntastic_java_javac_autoload_maven_classpath
+            if !g:syntastic_java_javac_delete_output
+                let javac_opts .= ' -d ' . syntastic#util#shescape(s:MavenOutputDirectory())
+            endif
+            let javac_classpath = s:AddToClasspath(javac_classpath, s:GetMavenClasspath())
+        endif
+        " }}}2
+    
+        " load custom classpath {{{2
+        if g:syntastic_java_javac_custom_classpath_command !=# ''
+            " Pre-process the classpath command string a little.
+            let classpath_command = g:syntastic_java_javac_custom_classpath_command
+            for [key, val] in items(s:_FILE_SHORTCUTS)
+                let classpath_command = substitute(classpath_command, '\V' . key, syntastic#util#shexpand(val), 'g')
+            endfor
+            let lines = syntastic#util#system(classpath_command)
+            if syntastic#util#isRunningWindows() || has('win32unix')
+                let lines = substitute(lines, "\r\n", "\n", 'g')
+            endif
+            for l in split(lines, "\n")
+                let javac_classpath = s:AddToClasspath(javac_classpath, l)
+            endfor
+        endif
+
+        call s:SaveComputedClasspath(javac_classpath)
+
+    endif
+
+    return javac_classpath
+endfunction " }}}1
+
 
 " Utilities {{{1
 
@@ -259,12 +269,12 @@ function! s:SaveClasspath() " {{{2
     let &modified = 0
 endfunction " }}}2
 
-function! s:SaveComputedClasspath() " {{{2
+function! s:SaveComputedClasspath(classpath) " {{{2
     " save classpath to config file
     if g:syntastic_java_javac_config_file_enabled
         let lines = []
         " add new g:syntastic_java_javac_classpath option to config
-        call add(lines, 'let g:syntastic_java_javac_classpath = ' . string(s:javac_classpath))
+        call add(lines, 'let g:syntastic_java_javac_classpath = ' . string(a:classpath))
         " save config file lines
         call writefile(lines, expand(g:syntastic_java_javac_config_file, 1))
     endif
