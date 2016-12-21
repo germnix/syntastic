@@ -109,6 +109,7 @@ function! SyntaxCheckers_java_javac_GetLocList() dict " {{{1
     " load classpath from config file
     if g:syntastic_java_javac_config_file_enabled
         call s:LoadConfigFile()
+        let s:javac_classpath = g:syntastic_java_javac_classpath
     endif
 
 
@@ -154,6 +155,9 @@ function! SyntaxCheckers_java_javac_GetLocList() dict " {{{1
                 let s:javac_classpath = s:AddToClasspath(s:javac_classpath, l)
             endfor
         endif
+
+        call s:SaveComputedClasspath()
+
     endif
 
     if s:javac_classpath !=# ''
@@ -254,6 +258,17 @@ function! s:SaveClasspath() " {{{2
     let g:syntastic_java_javac_classpath = path
     let &modified = 0
 endfunction " }}}2
+
+function! s:SaveComputedClasspath() " {{{2
+    " save classpath to config file
+    if g:syntastic_java_javac_config_file_enabled
+        let lines = []
+        " add new g:syntastic_java_javac_classpath option to config
+        call add(lines, 'let g:syntastic_java_javac_classpath = ' . string(s:javac_classpath))
+        " save config file lines
+        call writefile(lines, expand(g:syntastic_java_javac_config_file, 1))
+    endif
+endfunction "}}}2
 
 function! s:EditClasspath() " {{{2
     let command = 'syntastic javac classpath'
